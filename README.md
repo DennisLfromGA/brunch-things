@@ -1,3 +1,3 @@
 ## brunch-things (from Project: [brunch](https://github.com/sebanc/brunch))
 
-#### Files for backing up and restoring 'brioche' containers 
+#### Files for backing up and restoring 'brioche' containers (and more hopefully ...)
