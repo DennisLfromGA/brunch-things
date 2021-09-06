@@ -8,10 +8,10 @@
 APPL='install.brio-br'
 APPLBR='brio-br'
 BIN=${BIN:-/usr/local/bin}
-BBRURL='https://gist.githubusercontent.com/DennisLfromGA/af7f9b6a8347d929b66cc3b532d43043/raw/brio-br'
+BBRURL='https://raw.githubusercontent.com/DennisLfromGA/brunch-things/main/brio-br'
 CWD="$(pwd)"
 DOWNLOADS=${DOWNLOADS:-${HOME}/Downloads}
-IBBRURL='https://gist.githubusercontent.com/DennisLfromGA/1ae8c81ff3eff0e129c0e52313490b87/raw/install.brio-br'
+IBBRURL='https://raw.githubusercontent.com/DennisLfromGA/brunch-things/main/install.brio-br'
 INSTRUCTIONS="
 IMPORTANT: To download, install & run this script enter:
 
@@ -51,8 +51,9 @@ Note: To force an update of '${APPLBR}' when none is needed prepend '${APPL}' wi
       (I.E.) UPDATE=y BIN=~/bin PERM=775 DOWNLOADS=~/ SUDO=' ' ${APPL}
 "
 # VERSION format: "n.n.$(date +%Y%m%d%H%M)"
-VERSION='2.0.1.202109061542'
+VERSION='2.0.2.202109061732'
 VERHIST="\
+${APPL}-2.1.0.202109061732 : Changed URLS from gists to a repo for install.brio-br & brio-br
 ${APPL}-2.0.1.202109061542 : Added option to force an update of brio-br
 ${APPL}-2.0.0.202109061536 : Added update check of both install.brio-br & brio-br
 ${APPL}-1.6.1.202109061244 : Made mostly minor cosmetic changes to display
@@ -150,7 +151,7 @@ ask_nicely() {
 		ask_nicely
 		;;
 	[cC])
-		check_versions
+		check_versions || exit
 		ask_nicely
 		;;
 	[qQ]|[aA])
