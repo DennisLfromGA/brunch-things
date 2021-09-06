@@ -1,0 +1,209 @@
+#!/bin/bash
+# 'install.brio-br' - A script to install 'brio-br' and associated links to '/usr/local/bin' as root (default)
+##
+#########################
+### Declare variables ###
+#########################
+##
+APPL='install.brio-br'
+APPLBR='brio-br'
+BIN=${BIN:-/usr/local/bin}
+BBRURL='https://gist.githubusercontent.com/DennisLfromGA/af7f9b6a8347d929b66cc3b532d43043/raw/brio-br'
+CWD="$(pwd)"
+DOWNLOADS=${DOWNLOADS:-${HOME}/Downloads}
+IBBRURL='https://gist.githubusercontent.com/DennisLfromGA/1ae8c81ff3eff0e129c0e52313490b87/raw/install.brio-br'
+INSTRUCTIONS="
+IMPORTANT: To download, install & run this script enter:
+
+	cd &&\\
+	curl -LO ${IBBRURL} &&\\
+	sudo install -Dt /usr/local/bin -m 755 ${APPL} && bash ${APPL} &&\\
+	rm ./${APPL}
+"
+PERM=${PERM:-755}
+OPTIONS="\
+Options:
+	-h    Displays help message for options (this blurb)
+	-i    Displays instructions to download, install and run this script
+	-l    Lists installed files & links under ${BIN}
+	-u    Displays usage for backup and restore
+	-c    Check if installed versions of '${APPL}' & '${APPLBR}' are up-to-date
+	-v    Displays the current version of '${APPL}'
+	-V    Displays version number plus version history
+"
+
+SUDO=${SUDO:-sudo}
+UPDATE="${UPDATE:-n}"
+USAGE="
+'${APPL}': A script to install '${APPLBR}' and associated links to '/usr/local/bin' as root (default)
+${INSTRUCTIONS}
+Will link: 'brio-b' & 'brio-backup'  to '${APPLBR}' which forces those scripts to run the 'backup'  option.
+Will link: 'brio-r' & 'brio-restore' to '${APPLBR}' which forces those scripts to run the 'restore' option.
+
+Usage: '${APPL}' [-h|-i|-l|-u|-c|-v|-V] (see Help/Options)
+
+Note: To force an update of '${APPLBR}' when none is needed prepend '${APPL}' with UPDATE=y
+      To replace the install PATH (default: /usr/local/bin) prepend '${APPL}' with BIN=your/path
+      To replace the file permissions (default 755) prepend '${APPL}' with PERM=nnn
+      To replace the Downloads PATH (default: ~/Downloads) prepend '${APPL}' with DOWNLOADS=my/downloads
+      To execute '${APPL}' as user '${USER}' instead of 'root' (default) prepend '${APPL}' with SUDO=' '
+
+      (I.E.) UPDATE=y BIN=~/bin PERM=775 DOWNLOADS=~/ SUDO=' ' ${APPL}
+"
+# VERSION format: "n.n.$(date +%Y%m%d%H%M)"
+VERSION='2.0.1.202109061542'
+VERHIST="\
+${APPL}-2.0.1.202109061542 : Added option to force an update of brio-br
+${APPL}-2.0.0.202109061536 : Added update check of both install.brio-br & brio-br
+${APPL}-1.6.1.202109061244 : Made mostly minor cosmetic changes to display
+${APPL}-1.6.0.202109061236 : Added 3rd digit to VERSION for minor tweaks
+${APPL}-1.5.202109051624 : Added 'list files' to options
+${APPL}-1.5.202109051624 + Misc. tweaks to functions, clarified file listing location, etc.
+${APPL}-1.4.202109051455 : Minor tweak to 'valid responses' for instructions - duh!
+${APPL}-1.3.202109051436 : Tweaked to include instructions option throughout
+${APPL}-1.2.202109051325 : Added instructions to download, install & execute this script
+${APPL}-1.1.202109051151 : Added raw link to download 'brio-br' and command-line options
+${APPL}-1.0.202109041942 : Initial script to install 'brio-br' and associated links"
+##
+#######################
+### Setup functions ###
+#######################
+##
+## exit with exit code $1, spitting out message $@ to stderr
+echo_e='/bin/echo -e'
+error() {
+	local ecode="${1}"
+	shift
+	${echo_e} "${*}" 1>&2
+	exit "${ecode}"
+}
+##
+check_for_opts() {
+## Get command line parameters
+	local OPTIND
+	while getopts hoilucvV OPT; do
+		case ${OPT} in
+			h|o) error 0 "${OPTIONS}";;
+			i) error 0 "${INSTRUCTIONS}";;
+			l) cd ${BIN} 1>/dev/null
+				 echo; echo "File listing under ${BIN}:"
+				 ls -li ${APPLBR} brio-b brio-backup  brio-r brio-restore ${APPL}
+				 exit 0;;
+			u) error 0 "${USAGE}";;
+			c) check_versions; exit;;
+			v) echo "${VERHIST}" | grep ${VERSION}; exit 0 ;;
+			V) error 0 "VERSION:${VERSION}\n${VERHIST}" ;;
+			\?) error 1 "${USAGE}\n${OPTIONS}";;
+		esac
+	done
+	shift "$((OPTIND-1))"
+	if [ "${#}" -gt 0 ]; then
+		echo "${APPL}: invalid option -- ${1}"
+		error 1 "${USAGE}\n${OPTIONS}"
+	fi
+}
+##
+check_versions() {
+	cd /tmp 1>/dev/null
+	if curl -sLO ${BBRURL} && diff -qw ${APPLBR} /usr/local/bin; then
+		echo "Your installed version of '${APPLBR}' is up-to-date and good to go ..."
+	else
+		echo "Your installed version of '${APPLBR}' is NOT up-to-date, update requested ..."
+		UPDATE='y'
+	fi
+	if curl -sLO ${IBBRURL} && diff -qw ${APPL} /usr/local/bin; then
+		echo "Your installed version of '${APPL}' is up-to-date and good to go ..."
+	else
+		echo "Your installed version of '${APPL}' is NOT up-to-date, update needed, see below ..."
+		UPDATE='y'; echo "${INSTRUCTIONS}"; return 1
+	fi
+	echo
+}
+##
+ask_nicely() {
+	local REPLY=''
+	if [ "${UPDATE}" = "n" ]; then
+		error 0 "No updates needed, exiting ..."
+	fi
+	echo "Install '${APPLBR}' and associated links to '${BIN}' as root (default) [Ysilhq] ?"
+	read -s -n 1 -p "Enter 'y' to install, 'i' for installation instructions, 'l' to list, 'c' check versions, 'h' for help, or 'q' to quit ? "
+	echo
+	case ${REPLY:-Y} in 
+	[yY])
+		echo; echo "Installing '${APPLBR}' and links to ${BIN} ..."
+		;;
+	[iI])
+		error 0 "${INSTRUCTIONS}"
+		;;
+	[lL])
+		cd ${BIN} 1>/dev/null
+		echo; echo "File listing under ${BIN}:"
+		ls -li ${APPLBR} brio-b brio-backup  brio-r brio-restore ${APPL}
+		echo; ask_nicely
+		;;
+	[hH]|[oO])
+		echo "${OPTIONS}"
+		ask_nicely
+		;;
+	[uU])
+		echo "${USAGE}"
+		ask_nicely
+		;;
+	[cC])
+		check_versions
+		ask_nicely
+		;;
+	[qQ]|[aA])
+		echo; error 0 "Aborting/Quitting ..."
+		;;
+	v)
+		echo; echo "${VERHIST}" | grep ${VERSION}
+		echo; ask_nicely
+	;;
+	V)
+		echo; echo "VERSION:${VERSION}"
+		echo "${VERHIST}"
+		echo; ask_nicely
+	;;
+	*)
+		echo "Sorry, valid responses are:"
+		echo; echo "      'y' to install, 'i' for installation instructions, 'l' to list, 'h' for help, or 'q' to quit."
+		echo; ask_nicely
+		;;
+	esac
+}
+##
+install_brio-br() {
+	cd ${DOWNLOADS} 1>/dev/null
+	curl -L -O --progress-bar ${BBRURL} || \
+		error 2 "Cannot download '${APPLBR}'"
+	${SUDO} rm -f ${BIN}/${APPLBR} 2>/dev/null ||
+		error 2 "Cannot remove existing '${APPLBR}'"
+	${SUDO} install -Dt ${BIN} -m 755 ${DOWNLOADS}/${APPLBR} ||
+		error 3 "Cannot install '${APPLBR}'"
+	## Using hard links to avoid 'nosymfollow'
+	${SUDO} ln -fT ${BIN}/${APPLBR} ${BIN}/brio-b ||
+		error 4 "Cannot link '${APPLBR}' as 'brio-b'"
+	${SUDO} ln -fT ${BIN}/${APPLBR} ${BIN}/brio-backup ||
+		error 4 "Cannot link '${APPLBR}' as 'brio-backup'"
+	${SUDO} ln -fT ${BIN}/${APPLBR} ${BIN}/brio-r ||
+		error 4 "Cannot link '${APPLBR}' as 'brio-r'"
+	${SUDO} ln -fT ${BIN}/${APPLBR} ${BIN}/brio-restore ||
+		error 4 "Cannot link '${APPLBR}' as 'brio-restore'"
+}
+##
+###########################
+### Main section ###
+###########################
+##
+if [ $(id -u) -eq 0 ]; then
+	echo
+	echo "ERROR: ${APPL} must NOT be run as root!"
+	error 1 "${USAGE}"
+fi
+check_for_opts "${@}"
+check_versions || exit
+ask_nicely
+install_brio-br
+cd ${CWD} 1>/dev/null
+error 0 "'${APPL}' successful, exiting."

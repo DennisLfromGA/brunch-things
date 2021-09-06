@@ -1,0 +1,513 @@
+#!/bin/bash
+# 'brio-br' - A script to list, backup and restore brioche containers
+##
+#########################
+### Declare variables ###
+#########################
+##
+## COMMON variables ##
+##
+APPL="${0##*/}"
+DOWNLOADS="${DOWNLOADS:-${HOME}/Downloads}"
+OPERATION=''
+OPTIONS="\
+Specify backup (-b) or restore (-r) as command-line optons.
+Optionally displays help/options, usage, script version, & version history then exits
+
+Options:
+	-b    List & backup brioche containers
+	-r    List & restore brioche containers
+	-h    Displays help message for options (this blurb)
+	-u    Displays usage for backup and restore and exits
+	-v    Displays the current version of '${APPL}' and exits
+	-V    Displays version number plus version history & exits
+"
+USAGE="
+## brio-br - A script to list, backup and restore brioche containers
+
+USAGE:'brio-br -b / brio-b / brio-backup'
+	Backs up brioche containers found under '~/brioche/'
+	to '${DOWNLOADS}' (default: ~/Downloads).
+	The script will prompt for each container before proceeding.
+
+				-or-
+
+USAGE:'brio-br -r / brio-r / brio-restore'
+	Restores brioche container backups found under '${DOWNLOADS}'
+	(default: ~/Downloads) to the named container under '~/brioche/'.
+	The script will prompt for each container before proceeding.
+	and append the last modified date & time to any existing container folders found.
+
+NOTE: Please use 'install.brio-br' to install and link the above scripts automagically.
+"
+# VERSION format: "n.n.$(date +%Y%m%d%H%M)"
+VERSION='4.2.0.202109061337'
+VERHIST="\
+${APPL}-4.2.0.202109061337 : Changed container selection for restorals
+${APPL}-4.2.0.202109061337 + since those with date suffixes weren't picked up
+${APPL}-4.1.1.202109061244 : Made mostly minor cosmetic changes to display
+${APPL}-4.1.0.202109061238 : Added 3rd digit to VERSION for minor tweaks
+${APPL}-4.0.202109041942 : Combined both brio-backup & brio-restore using brio-br
+${APPL}-4.0.202109041942 + Cleaned up & (attempted to) beautify code."
+##
+## BACKUP variables ##
+##
+BACKEDUP=''
+BACKUPS=''
+BEGIN=''
+DATE="$(date '+%F-%I%M%P')"
+FAILED=''
+OPT=''
+##
+## RESTORE variables ##
+##
+CONTAINERS=''
+DELAY=5
+RESTORALS=''
+##
+#######################
+### Setup functions ###
+#######################
+##
+## Common functions ##
+##
+### functions with b/r prefix are for backup/restore respectively
+### Following two functions, error & spinner, borrowed from the 'crouton' authors 
+##
+## exit with exit code $1, spitting out message $@ to stderr
+echo_e='/bin/echo -e'
+error() {
+	local ecode="${1}"
+	shift
+	${echo_e} "${*}" 1>&2
+	exit "${ecode}"
+}
+##
+## Prints out a fancy spinner that updates every time a line is fed in, unless
+## the output is not to a tty, in which case it just prints a new line.
+# $1: number of lines between each update of the spinner
+# $2...: Command to be run
+# Erases the line each time, so it will always be at position 0.
+# Either expect this and put text later in the line, or give this its own line.
+spinner() {
+	local spin="$1"
+	shift
+	if [ -t 2 ]; then
+		# Keep track of the exit status of the piped command
+		local ret="`(("$@" || echo "$?" 1>&3) | mawk -Winteractive '
+			BEGIN {
+				printf "\r"
+			}
+			{
+				y = (y+1) % '"$spin"'
+				if (y == 0) {
+					x = (x+1) % 4
+					printf substr("\|/-", x+1, 1) "\r"
+				}
+			}' 1>&2) 3>&1`"
+		if [ -n "$ret" ]; then
+			return "$ret"
+		fi
+	else
+		echo 1>&2
+		"$@" 1>/dev/null
+	fi
+}
+##
+check_for_opts() {
+## Get command line parameters
+	local OPTIND
+	while getopts brhouvV OPT; do
+		case ${OPT} in
+			b) OPERATION=backup;;
+			r) OPERATION=restore;;
+			h|o) error 0 "$OPTIONS";;
+			u) error 0 "${USAGE}";;
+			v) echo "${VERHIST}" | grep ${VERSION}; exit 0 ;;
+			V) error 0 "VERSION:${VERSION}\n${VERHIST}" ;;
+			\?) error 2 "$USAGE";;
+		esac
+	done
+	shift "$((OPTIND-1))"
+	if [ "${#}" -gt 0 ]; then
+		echo "${APPL}: invalid option -- ${1}"
+		error 1 "${USAGE}\n${OPTIONS}"
+	fi
+}
+##
+check_for_downloads() {
+	if [ ! -d ${DOWNLOADS} ]; then
+		echo
+		echo "Sorry, no '${DOWNLOADS}' directory exists."
+		echo "If your backups are somewhere else please either move them under ~/Downloads"
+		error 1 "or invoke this script with 'DOWNLOADS=[path-to-backups-folder] ${APPL}'\n"
+	fi
+}
+##
+## BACKUP functions ##
+##
+b_check_for_brioche() {
+	if [ ! -d ${HOME}/brioche ]; then
+		echo "Sorry, no '~/brioche/' directory exists."
+		error 1 "If they are under /root/brioche please move them under ~/brioche/."
+	elif ! ls ${HOME}/brioche/* 2>/dev/null 1>&2; then
+		error 1 "Sorry, no brioche containers found under ~/brioche/."
+	else
+		sudo chown chronos:root ${HOME}/brioche 2>/dev/null
+		cd ${HOME}/brioche/ 1>/dev/null
+		echo "Found the followoing brioche container candidates for backup:"
+		echo; echo -n "	"; ls
+	fi
+}
+##
+b_ask_for_backup() {
+	local BEGIN='' CONT='' REPLY=''
+	cd ${HOME}/brioche/ 1>/dev/null
+	for CONT in $(ls); do
+		sudo chown chronos:root ${HOME}/brioche/${CONT} 2>/dev/null
+		cd ${HOME}/brioche/${CONT} 1>/dev/null
+		echo
+		echo "Backup brioche container '${CONT}' to ${DOWNLOADS} [Ysra] ? "
+		read -n 1 -p "PRESS 'y' to backup, 's' to SKIP, 'r' to RESTART or 'a' to ABORT! " REPLY
+		if [ -n "${REPLY}" ]; then
+			case ${REPLY} in 
+				[yY])
+					echo; echo "Got '${REPLY}', '${CONT}' added to backups ..."
+					BACKUPS="${BACKUPS} ${CONT}"
+				;;
+				[sS]|[nN])
+					echo; echo "Got '${REPLY}', so Skipping '${CONT}' ..."
+					continue
+				;;
+				[rR])
+					echo; echo "Got '${REPLY}', so Restarting ..."
+					BACKUPS=''
+					b_ask_for_backup
+				;;
+				[aA]|[xX])
+					echo; echo -n "Got '${REPLY}, '"
+					error 0 "okay, ABORTING/QUITTING ..."
+				;;
+				*)
+					echo; echo "Got '${REPLY}', no such option '${REPLY}' ..."
+					echo "Only 'y' to backup, 's' to SKIP, 'r' to RESTART or 'a' to ABORT are accepted."
+					error 1 "${USAGE}"
+				;;
+			esac
+		else
+			echo; echo "Got 'ENTER', '${CONT}' added to backups ..."
+			BACKUPS="${BACKUPS} ${CONT}"
+		fi
+	done
+ 	BACKUPS="$(echo ${BACKUPS} | sed 's/^ //'; 's/ $//' 2>/dev/null)"
+	if [ -z "${BACKUPS}" ]; then
+		echo
+		echo "No backups entered ..."
+	else
+		echo
+		echo "Ready to backup container:"
+		echo; echo "	${BACKUPS}"
+		echo; echo -n "Press 'ENTER' to begin or 'Ctrl-C' to ABORT ..."
+		read BEGIN
+	fi
+}
+##
+b_do_backup() {
+	local CONT=''
+	for CONT in ${BACKUPS}; do
+		echo
+		echo "Stopping '${CONT}' - just in case ..."
+		brioche ${CONT} stop 2>/dev/null
+		echo "Backing up '${CONT}' to '${DOWNLOADS}/${CONT}.${DATE}.brio' ..."
+		sudo rm -f "${DOWNLOADS}/${CONT}.${DATE}.brio" 2>/dev/null
+		trap "rm -f ${DOWNLOADS}/${CONT}.${DATE}.brio; \
+			error 2 \"Back up of '${CONT}' aborted, file deleted!\"" INT HUP TERM 0
+		if type -P pv 1>/dev/null; then
+			# "'pv' is installed."
+			cd ${HOME}/brioche/${CONT} 1>/dev/null
+			sudo tar -cf - . | pv -s $(sudo du -sb . 2>/dev/null | awk '{print $1}') | gzip > \
+				${DOWNLOADS}/${CONT}.${DATE}.brio || FAILED="${FAILED} ${CONT}"
+				if echo ${FAILED} | grep -q ${CONT}; then
+					sudo rm -f "${DOWNLOADS}/${CONT}.${DATE}.brio"; \
+					echo "Back  up of '${CONT}' failed!"
+				fi
+		else
+			# "'pv' is NOT installed."
+			spinner 10 sudo tar --checkpoint=10 --checkpoint-action=exec=echo --numeric-owner \
+				-czf ${DOWNLOADS}/${CONT}.${DATE}.brio . 1>&2 || FAILED="${FAILED} ${CONT}"
+				if echo ${FAILED} | grep -q ${CONT}; then
+					sudo rm -f "${DOWNLOADS}/${CONT}.${DATE}.brio"; \
+					echo "Back  up of '${CONT}' failed!"
+				fi
+		fi
+		trap - INT HUP TERM 0
+		sudo chown chronos:root ${DOWNLOADS}/${CONT}.${DATE}.brio 2>/dev/null
+		echo "Back up of '${CONT}' finished ..."
+		BACKEDUP="${BACKEDUP} ${CONT}"
+	done
+ 	BACKEDUP="$(echo ${BACKEDUP} | sed 's/^ //'; 's/ $//' 2>/dev/null)"
+ 	FAILED="$(echo ${FAILED} | sed 's/^ //'; 's/ $//' 2>/dev/null)"
+}
+##
+b_report_results() {
+	echo
+	if [ -n "${FAILED}" ]; then
+		echo "Backups FAILED for brioche container ${FAILED} !"
+	fi
+	if [ -n "${BACKEDUP}" ]; then
+		echo "Backups complete for brioche container(s) ${BACKEDUP} - see below:"
+		ls -l ${DOWNLOADS}/*.${DATE}.brio 2>/dev/null
+	else
+		echo "No brioche container backup(s) created ..."
+	fi
+}
+##
+## RESTORE functions ##
+##
+r_check_for_backups() {
+	local CONT='' REST=''
+	cd ${DOWNLOADS} 1>/dev/null
+	for REST in $(ls *.brio 2>/dev/null); do
+		CONT=$(echo ${REST} | cut -d '.' -f1)
+		CONTAINERS="${CONTAINERS} ${CONT}"
+	done
+	CONTAINERS="$(echo "${CONTAINERS}" | tr ' ' '\n' | sort -u | tr '\n' ' ')"
+ 	CONTAINERS="$(echo ${CONTAINERS} | sed 's/^ //'; 's/ $//' 2>/dev/null)"
+	if [ -n "${CONTAINERS}" ]; then
+		echo "Backups found for brioche container(s) ${CONTAINERS} - see below:"
+		echo "(if multiple backups are found for the same container then you can select one from a list.)"
+		echo
+		ls -ltr  *.brio 2>/dev/null
+	else
+		echo "No brioche container backup(s) found ..."
+		error 1 "Note: They should be named: '[CONTAINER_NAME].[DATE-TIME].brio'"
+	fi
+}
+##
+r_check_for_containers() {
+	local CONT='' EXIST=''
+	if [ ! -d ${HOME}/brioche ]; then
+		echo
+		echo "No '~/brioche/' directory exists, making one now ..."
+		mkdir -p ${HOME}/brioche
+	else
+		echo
+		echo "Found '~/brioche/' directory ..."
+	fi
+	sudo chown chronos:root ${HOME}/brioche
+	cd ${HOME}/brioche/ 1>/dev/null
+	for CONT in ${CONTAINERS}; do 
+		if ls ${CONT}* 1>/dev/null; then
+			EXIST="${EXIST} ${CONT}"
+		fi
+	done
+ 	EXIST="$(echo ${EXIST} | sed 's/^ //'; 's/ $//' 2>/dev/null)"
+	if [ -n "${EXIST}" ]; then
+		echo
+		echo "These brioche containers exist and if selected for restoral will be"
+		echo "be renamed to have their last modified date & time appended to them:"
+		echo; echo "	${EXIST}"
+	else
+		echo "No brioche container(s) existing ..."
+	fi
+}
+##
+r_ask_for_restoral() {
+	local BEGIN='' CONT='' NMBR='' REPLY='' REST=''
+	cd ${DOWNLOADS} 1>/dev/null
+	for CONT in ${CONTAINERS}; do 
+		NMBR="$(ls -1 ${CONT}*.brio 2>/dev/null | wc -l)"
+		if [ "${NMBR}" -gt 1 ]; then
+			echo
+			echo "There were ${NMBR} backups found for '${CONT}'."
+			echo "Restore one of the '${CONT}' brioche backups to ~/brioche/${CONT} [Ysra] ?"
+		else
+			REST="$(ls -tr ${CONT}*.brio 2>/dev/null)"
+			echo
+			echo "Restore brioche backup '${REST}' to ~/brioche/${CONT} [Ysra] ?"
+		fi
+		read -n 1 -p "PRESS 'y' to restore, 's' to SKIP, 'r' to RESTART or 'a' to ABORT/QUIT! " REPLY
+		if [ -n "${REPLY}" ]; then
+			case ${REPLY} in 
+				[yY])
+					echo; echo "Got '${REPLY}', '${CONT}' added to restorals ..."
+					RESTORALS="${RESTORALS} ${CONT}"
+				;;
+				[sS]|[nN])
+					echo; echo "Got '${REPLY}', so Skipping '${CONT}' ..."
+					continue
+				;;
+				[rR])
+					echo; echo "Got '${REPLY}', so Restarting ..."
+					CONT=''; NMBR=''; REPLY=''; REST=''; RESTORALS=''
+					r_ask_for_restoral
+				;;
+				[aA]|[xX])
+					echo; echo -n "Got '${REPLY}, '"
+					error 0 "okay, ABORTING/QUITTING ..."
+				;;
+				*)
+					echo; echo "Got '${REPLY}', no such option '${REPLY}' ..."
+					echo "Only 'y' to restore, 's' to SKIP, 'r' to RESTART or 'a' to ABORT/QUIT are accepted."
+					error 1 "${USAGE}"
+				;;
+			esac
+		else
+			echo; echo "Got 'ENTER', '${CONT}' added to restorals ..."
+			RESTORALS="${RESTORALS} ${CONT}"
+		fi
+	done
+ 	RESTORALS="$(echo ${RESTORALS} | sed 's/^ //'; 's/ $//' 2>/dev/null)"
+	if [ -n "${RESTORALS}" ]; then
+		echo
+		echo "Ready to restore container(s):"
+		echo; echo "	${RESTORALS}"
+		echo; echo -n "Press 'ENTER' to begin or 'Ctrl-C' to ABORT/QUIT: "
+		read BEGIN
+	else
+		echo
+		echo "No brioche container backup(s) selected ..."
+	fi
+}
+##
+r_do_restoral() {
+	local COLUMNS=1 CONT='' DIRDATE='' FILES='' NMBR='' PS3='' REST=''
+	cd ${DOWNLOADS} 1>/dev/null
+	for CONT in ${RESTORALS}; do
+		NMBR="$(ls -1 ${CONT}*.brio 2>/dev/null | wc -l)"
+		if [ "${NMBR}" -gt 1 ]; then
+			echo
+			echo "More than one backup for '${CONT}' exists, please select one from the list below:"
+			echo "(the backup files are listed in chronogical order, #1 will be the most recent.)"
+			echo
+			FILES="$(ls -1t ${CONT}*.brio)"
+			PS3=$'\n'"Choose one of the above backup files to restore to the '${CONT}' container,"$'\n'"or select Skip, Restart, or Abort/Quit ? "$'\n'
+			select REST in ${FILES} Skip Restart Abort/Quit; do
+				if [ -z "$REST" ] ; then
+					echo "[ERROR] Invalid option"
+					continue
+				fi
+				case "$REST" in
+				Skip)
+					echo; echo "Got '${REST}', so Skipping '${CONT}' ..."
+					continue 2
+				;;
+				Restart)
+					echo; echo "Got '${REST}', so Restarting ..."
+					CONT=''; DIRDATE=''; FILES=''; NMBR=''; PS3=''; REST=''; RESTORALS=''
+					r_ask_for_restoral
+				;;
+				Abort/Quit)
+					echo; echo -n "Got '${REST}, '"
+					error 0 "okay, Aborting/Quitting ..."
+				;;
+				*) echo "Brunch backup file selected: $REST"
+					RESTORALS="${RESTORALS} ${CONT}"
+					break
+				;;
+				esac
+			done
+			echo
+		else
+			REST="$(ls -tr ${CONT}*.brio 2>/dev/null)"
+		fi
+		if [ ! -d ${HOME}/brioche/${CONT} ]; then
+			echo "No '~/brioche/${CONT}' directory exists, making one now ..."
+		else
+			echo "WARNING: A brioche container '${CONT}' already exists, it is being renamed: ${CONT}.${DIRDATE} ..."
+			DIRDATE="$(date -r ${HOME}/brioche/${CONT} '+%Y%m%d%H%M')"
+			mv -n ${HOME}/brioche/${CONT} ${HOME}/brioche/${CONT}.${DIRDATE}
+			echo "Stopping '${CONT}' - just in case ..."
+			brioche ${CONT}.${DIRDATE} stop 2>/dev/null
+			sleep ${DELAY}
+		fi
+		mkdir -p ${HOME}/brioche/${CONT}
+		sudo chown chronos:root ${HOME}/brioche/${CONT}
+		echo "Restoring '${REST}' to '~/brioche/${CONT}' ..."
+		trap "sudo rm -f ${HOME}/brioche/${CONT}; \
+			mv -f ${HOME}/brioche/${CONT}.${DIRDATE} ${HOME}/brioche/${CONT} 2>/dev/null \
+			error 2 \"Restoral up of '${CONT}' aborted, container deleted!\"" INT HUP TERM 0
+		if type -P pv 1>/dev/null; then
+			# "'pv' is installed."
+			sudo pv -Ws $(du -s ${REST} | awk '{print $1}') ${REST} | \
+				tar -zx -C . || FAILED="${FAILED} ${CONT}"
+			if echo ${FAILED} | grep -q ${CONT}; then
+				mv -f ${HOME}/brioche/${CONT}.${DIRDATE} ${HOME}/brioche/${CONT} 2>/dev/null
+				echo "Restoral of '${CONT}' failed!"
+			else
+				RESTORED="${RESTORED} ${CONT}"
+			fi
+		else
+			# "'pv' is NOT installed."
+			spinner 10 sudo tar --checkpoint=10 --checkpoint-action=exec=echo --numeric-owner \
+				-xzf ${REST} -C ${HOME}/brioche/${CONT} 1>&2 || FAILED="${FAILED} ${CONT}"
+			if echo ${FAILED} | grep -q ${CONT}; then
+				mv -f ${HOME}/brioche/${CONT}.${DIRDATE} ${HOME}/brioche/${CONT} 2>/dev/null
+				echo "Restoral of '${CONT}' failed!"
+			else
+				RESTORED="${RESTORED} ${CONT}"
+			fi
+		fi
+		trap - INT HUP TERM 0
+		RESTORED="$(echo ${RESTORED} | sed 's/^ //'; 's/ $//' 2>/dev/null)"
+		FAILED="$(echo ${FAILED} | sed 's/^ //'; 's/ $//' 2>/dev/null)"
+		echo "Restoral of '${CONT}' finished ..."
+		sudo chown chronos:root ${HOME}/brioche/${CONT}
+	done
+}
+##
+r_report_results() {
+	echo
+	if [ -n "${FAILED}" ]; then
+		echo "Restoral FAILED for brioche container(s) ${FAILED} !"
+	fi
+	if [ -n "${RESTORED}" ]; then
+		echo "Retorals complete for brioche container(s):"
+		echo; echo "	'${RESTORED}'"
+		echo
+		ls -l ${HOME}/brioche/
+	else
+		echo "No brioche container(s) restored ..."
+	fi
+}
+##
+###########################
+### Common Main section ###
+###########################
+##
+if [ ${UID:-$(id -u)} -eq 0 ]; then
+	echo
+	echo "ERROR: ${APPL} must NOT be run as root!"
+	error 1 "${USAGE}"
+fi
+check_for_opts "$@"
+case ${APPL} in
+		brio-b|brio-backup)  OPERATION=backup ;;
+		brio-r|brio-restore) OPERATION=restore ;;
+esac
+if [ "${OPERATION}" = "backup" ]; then
+	###########################
+	### BACKUP Main section ###
+	###########################
+	##
+	b_check_for_brioche
+	check_for_downloads
+	b_ask_for_backup
+	b_do_backup
+	b_report_results
+elif [ "${OPERATION}" = "restore" ]; then
+	############################
+	### RESTORE Main section ###
+	############################
+	check_for_downloads
+	r_check_for_backups
+	r_check_for_containers
+	r_ask_for_restoral
+	r_do_restoral
+	r_report_results
+else
+	echo "${USAGE}"
+	error 0 "$OPTIONS"
+fi
+echo
+exit 0
