@@ -51,9 +51,9 @@ Note: To force an update of '${APPLBR}' when none is needed prepend '${APPL}' wi
       (I.E.) UPDATE=y BIN=~/bin PERM=775 DOWNLOADS=~/ SUDO=' ' ${APPL}
 "
 # VERSION format: "n.n.$(date +%Y%m%d%H%M)"
-VERSION='2.0.2.202109061732'
+VERSION='2.1.0.202109061732'
 VERHIST="\
-${APPL}-2.0.2.202109061732 : Changed URLS from gists to a repo for install.brio-br & brio-br
+${APPL}-2.1.0.202109061732 : Changed URLS from gists to a repo for install.brio-br & brio-br
 ${APPL}-2.0.1.202109061542 : Added option to force an update of brio-br
 ${APPL}-2.0.0.202109061536 : Added update check of both install.brio-br & brio-br
 ${APPL}-1.6.1.202109061244 : Made mostly minor cosmetic changes to display
