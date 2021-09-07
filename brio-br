@@ -42,8 +42,9 @@ NOTE: Please use 'install.brio-br' to install and link the above scripts automag
     ( URL:https://raw.githubusercontent.com/DennisLfromGA/brunch-things/main/install.brio-br ) 
 "
 # VERSION format: "n.n.$(date +%Y%m%d%H%M)"
-VERSION='4.2.1.202109061742'
+VERSION='4.2.2.202109062230'
 VERHIST="\
+${APPL}-4.2.2.202109062230 : Tweaked displayed output for unknown option entered
 ${APPL}-4.2.1.202109061742 : Added URL for 'install.brio-br'
 ${APPL}-4.2.0.202109061337 : Changed container selection for restorals
 ${APPL}-4.2.0.202109061337 + since those with date suffixes weren't picked up
@@ -127,7 +128,7 @@ check_for_opts() {
 			u) error 0 "${USAGE}";;
 			v) echo "${VERHIST}" | grep ${VERSION}; exit 0 ;;
 			V) error 0 "VERSION:${VERSION}\n${VERHIST}" ;;
-			\?) error 2 "$USAGE";;
+			\?) error 1 "${USAGE}\n${OPTIONS}";;
 		esac
 	done
 	shift "$((OPTIND-1))"
