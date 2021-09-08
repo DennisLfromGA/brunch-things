@@ -41,7 +41,7 @@ Options:
 
 IMPORTANT: To initially download, install & run this script enter:
 
-        cd /tmp&&\
+        cd /tmp &&\
         curl -LO https://raw.githubusercontent.com/DennisLfromGA/brunch-things/main/install.brio-br &&\
         sudo install -Dt /usr/local/bin -m 755 install.brio-br && /usr/local/bin/install.brio-br
 
