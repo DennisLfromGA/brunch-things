@@ -34,9 +34,9 @@ Options:
         -u    Displays usage for backup and restore and exits
         -v    Displays the current version of 'brio-br' and exits
         -V    Displays version number plus version history & exits
-```
------------------
-```
+```   
+-----------------   
+```   
 'install.brio-br': A script to install 'brio-br' and associated links to '/usr/local/bin' as root (default)
 
 IMPORTANT: To initially download, install & run this script enter:
@@ -66,6 +66,6 @@ Options:
         -f    Force update of brio-br & install.brio-br
         -c    Check if installed versions of 'install.brio-br' & 'brio-br' are up-to-date
         -v    Displays the current version of 'install.brio-br'
-        -V    Displays version number plus version history```  
-        
+        -V    Displays version number plus version history
+```   
 ---------------
