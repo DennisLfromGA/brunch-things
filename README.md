@@ -66,5 +66,6 @@ Options:
         -f    Force update of brio-br & install.brio-br
         -c    Check if installed versions of 'install.brio-br' & 'brio-br' are up-to-date
         -v    Displays the current version of 'install.brio-br'
-        -V    Displays version number plus version history```
+        -V    Displays version number plus version history```  
+        
 ---------------
