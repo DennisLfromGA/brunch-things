@@ -50,23 +50,21 @@ Once installed the script will autoupdate if needed when it's run.
 Will link: 'brio-b' & 'brio-backup'  to 'brio-br' which forces those scripts to run the 'backup'  option.
 Will link: 'brio-r' & 'brio-restore' to 'brio-br' which forces those scripts to run the 'restore' option.
 
-Usage: 'install.brio-br' [-h|-i|-l|-u|-c|-v|-V] (see Help/Options)
+Usage: 'install.brio-br' [-h|-i|-l|-u|-f|-c|-v|-V] (see Help/Options)
 
-Note: To force an update of 'brio-br' when none is needed prepend 'install.brio-br' with UPDATE=y
-      To replace the install PATH (default: /usr/local/bin) prepend 'install.brio-br' with BIN=your/path
+Note: To replace the install PATH (default: /usr/local/bin) prepend 'install.brio-br' with BIN=your/path
       To replace the file permissions (default 755) prepend 'install.brio-br' with PERM=nnn
-      To replace the Downloads PATH (default: ~/Downloads) prepend 'install.brio-br' with DOWNLOADS=my/downloads
       To execute 'install.brio-br' as user 'chronos' instead of 'root' (default) prepend 'install.brio-br' with SUDO=' '
 
-      (I.E.) UPDATE=y BIN=~/bin PERM=775 DOWNLOADS=~/ SUDO=' ' install.brio-br
+      (I.E.) BIN=~/bin PERM=775 SUDO=' ' install.brio-br
 
 Options:
         -h    Displays help message for options (this blurb)
         -i    Displays instructions for initial download, install and running this script
         -l    Lists installed files & links under /usr/local/bin
         -u    Displays usage for backup and restore
+        -f    Force update of brio-br & install.brio-br
         -c    Check if installed versions of 'install.brio-br' & 'brio-br' are up-to-date
         -v    Displays the current version of 'install.brio-br'
-        -V    Displays version number plus version history
-```
+        -V    Displays version number plus version history```
 ---------------
